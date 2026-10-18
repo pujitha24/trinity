@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { readStoredToken } from './utils/platformSession'
@@ -50,6 +50,14 @@ const route = useRoute()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const { connect } = useWebSocket()
+
+// Connect whenever a session becomes authenticated — on boot with a stored
+// token AND after a client-side login, which never remounts App (so the
+// header indicator used to read Disconnected until a reload). `connect()` is
+// the only caller; the boot path below just flips `isAuthenticated`.
+watch(() => authStore.isAuthenticated, (authed) => {
+  if (authed) connect()
+}, { immediate: true })
 
 onMounted(async () => {
   // Initialize theme immediately to prevent flash
@@ -69,8 +77,6 @@ onMounted(async () => {
   if (token) {
     authStore.token = token
     authStore.isAuthenticated = true
-    // Connect to WebSocket for real-time updates
-    connect()
   }
 })
 </script>
