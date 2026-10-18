@@ -1635,7 +1635,13 @@ async def _dispatch_jsonrpc(
             # carries the caller principal, so the attached id can only be the
             # caller's own; the agent check is the `tasks/get` guard. A claim
             # with no id (a duplicate that raced the mint) keeps today's answer.
-            if method == "message/send" and decision.execution_id:
+            # An AAuth caller is answered from the row only once ownership is
+            # recorded: the original request writes it just before its own
+            # `working` answer, and a duplicate inside that window would get
+            # an id its `tasks/get` answers "Task not found" for.
+            if (method == "message/send" and decision.execution_id
+                    and (aauth is None
+                         or aauth_inbound.execution_owned_by(decision.execution_id, aauth.identity))):
                 row = db.get_execution(decision.execution_id)
                 if row and _exec_field(row, "agent_name") == agent_name:
                     return _rpc_result(rpc_id, _task_from_row(decision.execution_id, row))

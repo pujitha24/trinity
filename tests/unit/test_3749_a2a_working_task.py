@@ -596,6 +596,30 @@ def test_aauth_remember_false_keeps_holding_and_discloses_no_id(h, monkeypatch):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("owned,expect_working", [(False, False), (True, True)])
+def test_aauth_replay_while_running_discloses_the_id_only_when_owned(h, monkeypatch, owned, expect_working):
+    """A duplicate messageId inside the window before `remember_execution` has
+    run must not be handed an id its `tasks/get` would 404 on."""
+    arm = _slow(h, monkeypatch)
+    inbound = a2a.aauth_inbound
+    monkeypatch.setattr(inbound, "execution_owned_by", lambda eid, ident: owned)
+    aauth = types.SimpleNamespace(identity="https://caller.example")
+
+    async def run():
+        await arm()
+        h.state["executions"][MINTED] = {"agent_name": AGENT, "status": "running"}
+        h.state["force_decision"] = _Dec(key=("s", "dup"), replay=True, in_flight=True,
+                                         execution_id=MINTED)
+        body = await h.send(message_id="dup", aauth=aauth)
+        if expect_working:
+            assert body["result"]["status"]["state"] == "working"
+            assert body["result"]["id"] == MINTED
+        else:
+            assert body["error"]["code"] == -32603 and body["error"]["data"]["retryable"] is True
+        assert h.state["dispatched"] == []
+    asyncio.run(run())
+
+
 # --------------------------------------------------------------------------- #
 # Paid door (ent#679): the payer is bound before `working`, polls, may cancel
 # --------------------------------------------------------------------------- #
@@ -731,7 +755,7 @@ def p(monkeypatch):
             await asyncio.gather(*pending, return_exceptions=True)
 
     return types.SimpleNamespace(state=state, idem=idem, send=_send, rpc=_task_rpc,
-                                 drain=_drain)
+                                 drain=_drain, priced=priced)
 
 
 def _verify_rows(state):
@@ -822,6 +846,33 @@ def test_paid_another_wallet_cannot_poll_the_bound_turn(p, monkeypatch):
         stranger = await p.rpc("tasks/get", MINTED)
         assert stranger["error"]["code"] == a2a._A2A_TASK_NOT_FOUND
         await p.drain()
+    asyncio.run(run())
+
+
+def test_paid_refusal_after_the_deadline_never_answers_working_with_a_null_id(p, monkeypatch):
+    """The `exec_id is None` branch: a refused / replayed paid send that has
+    released the mint waiter (`None`) but is still finishing when the budget
+    ends must answer with the tail's own result, not `working` + `id: null`."""
+    monkeypatch.setattr(a2a, "A2A_SEND_WORKING_AFTER_SECONDS", 0.01)
+    release = asyncio.Event()
+
+    async def _refusing_tail(agent_name, text, priced, token, base_url, rpc_id, caller_ip,
+                             endpoint_path, handle):
+        handle.resolve(None)          # refused: no row will ever exist
+        await release.wait()          # ...but the tail outlives the budget
+        return a2a._rpc_error(rpc_id, a2a._RPC_INTERNAL_ERROR, "refused after deadline")
+    monkeypatch.setattr(a2a, "_finish_paid_send", _refusing_tail)
+
+    async def run():
+        send = asyncio.create_task(a2a._send_paid_task(
+            AGENT, "hi", p.priced, "tok", "http://t", 1, "203.0.113.9",
+            types.SimpleNamespace(scope={"path": "/a2a/x"})))
+        await asyncio.sleep(0.1)
+        assert not send.done(), "must keep waiting for the tail, not answer working"
+        release.set()
+        body = json.loads((await send).body)
+        assert body["error"]["message"] == "refused after deadline"
+        assert "result" not in body
     asyncio.run(run())
 
 
