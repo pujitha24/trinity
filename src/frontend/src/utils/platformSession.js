@@ -343,7 +343,7 @@ export function pathForVerdict(router, startLocation, locationPath = '') {
  * @param {() => string|null} [deps.readToken]
  * @param {() => void} deps.adoptStoredSession   authStore.adoptStoredSession
  * @param {() => unknown} deps.logout             authStore.logout — NOT awaited
- * @param {() => Promise|unknown} deps.goToLogin  router.push('/login')
+ * @param {() => Promise|unknown} deps.goToLogin  router.push(loginLocation(...))
  * @returns {{ verdict: 'ignore'|'stale'|'logout'|'logout-in-place', navigation: unknown }}
  *   `navigation` is whatever `goToLogin` returned, so the caller can absorb a
  *   rejected (redundant) navigation — see `notifyPlatformUnauthorized`.

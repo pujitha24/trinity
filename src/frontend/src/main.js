@@ -11,6 +11,7 @@ import {
   applyRequestCredential, notifyPlatformUnauthorized, pathForVerdict,
   reactToPlatformUnauthorized, reactToStorageEvent, setPlatformUnauthorizedHandler,
 } from './utils/platformSession'
+import { loginLocation } from './utils/safeRedirect'
 import { installConsoleBuffer } from './utils/consoleBuffer'
 import { reconnectWebSocket } from './utils/websocket'
 import {
@@ -75,7 +76,7 @@ function handlePlatformUnauthorized(error) {
     portalTokenPresent,
     adoptStoredSession: () => authStore.adoptStoredSession(),
     logout: () => authStore.logout(),
-    goToLogin: () => router.push('/login'),
+    goToLogin: () => router.push(loginLocation(router.currentRoute.value.fullPath)),
   })
   // RETURNED, so `notifyPlatformUnauthorized` can absorb a rejected redundant
   // navigation. The first version of this handler dropped the promise on the

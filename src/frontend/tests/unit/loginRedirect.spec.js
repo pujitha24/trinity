@@ -35,7 +35,7 @@ vi.mock('vue-router', () => ({
 
 import Login from '../../src/views/Login.vue'
 import { useAuthStore } from '../../src/stores/auth'
-import { safeRedirect } from '../../src/utils/safeRedirect'
+import { safeRedirect, loginLocation } from '../../src/utils/safeRedirect'
 
 const CANVAS = '/canvas/s/tok_1'
 
@@ -223,4 +223,16 @@ describe('A Workspace-only member lands in the Workspace (trinity-enterprise#837
     expect(link.exists()).toBe(true)
     expect(link.attributes('href')).toBe('/workspace')
   })
+})
+
+describe('loginLocation — #3444 the way back to the page that was asked for', () => {
+  it('carries a deep link in ?redirect=', () => {
+    expect(loginLocation('/agents/test-echo?tab=files'))
+      .toEqual({ path: '/login', query: { redirect: '/agents/test-echo?tab=files' } })
+  })
+
+  it.each(['/', '/login', '/login?redirect=/x', 'https://evil.example/', '', undefined])(
+    'is a bare /login for %s', (raw) => {
+      expect(loginLocation(raw)).toBe('/login')
+    })
 })

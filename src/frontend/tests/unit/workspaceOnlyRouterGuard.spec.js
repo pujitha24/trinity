@@ -129,3 +129,19 @@ describe('the router guard and the Workspace-only rung', () => {
     expect(here()).toBe('/agents/beacon')
   })
 })
+
+describe('the router guard and a signed-out deep link (#3444)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    globalThis.fetch = vi.fn(async () => ({ json: async () => ({ setup_completed: true }) }))
+  })
+
+  it('sends a signed-out visitor to /login carrying the page they asked for', async () => {
+    const auth = useAuthStore()
+    auth.isLoading = false
+    auth.isAuthenticated = false
+    await router.push('/agents/test-echo?tab=files')
+    expect(router.currentRoute.value.path).toBe('/login')
+    expect(router.currentRoute.value.query.redirect).toBe('/agents/test-echo?tab=files')
+  })
+})

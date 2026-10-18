@@ -3,6 +3,7 @@ import { setBaseTitle } from '@/utils/tabTitle'
 import axios from 'axios'
 import { useAuthStore } from '../stores/auth'
 import { isWorkspaceOnlyRole, landingAfterSignIn, operatorRouteRedirect } from '../utils/workspaceOnly'
+import { loginLocation } from '../utils/safeRedirect'
 import { useSessionsStore } from '../stores/sessions'
 import { useAgentsStore } from '../stores/agents'
 
@@ -483,8 +484,9 @@ router.beforeEach(async (to, from) => {
       }
       return true
     } else {
-      // User is not authenticated, redirect to login
-      return '/login'
+      // User is not authenticated, redirect to login — carrying the page they
+      // asked for so sign-in returns there (#3444)
+      return loginLocation(to.fullPath)
     }
   } else if (to.path === '/login' && authStore.isAuthenticated) {
     // User is authenticated but trying to access login page

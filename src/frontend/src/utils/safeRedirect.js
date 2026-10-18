@@ -20,3 +20,15 @@ export function safeRedirect(raw, fallback = '/') {
   if (/^\/login(?:[/?#]|$)/.test(raw)) return fallback
   return raw
 }
+
+/**
+ * The login location that returns to `fullPath` after sign-in (#3444).
+ *
+ * The inverse of `safeRedirect`: a path it would not honour (the dashboard,
+ * the login page itself, anything off-site) yields a bare `/login`, so the
+ * URL carries a `?redirect=` only when there is somewhere to come back to.
+ */
+export function loginLocation(fullPath) {
+  const target = safeRedirect(fullPath, '/')
+  return target === '/' ? '/login' : { path: '/login', query: { redirect: target } }
+}
