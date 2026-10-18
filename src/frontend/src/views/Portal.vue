@@ -1422,7 +1422,7 @@ async function landOnAgent(name) {
   if (!name) return
   activeAgentName.value = name
   const target = landingThread(threads.value, name)
-  if (target) { openThread(target); return }
+  if (target) { openThread(target, { replace: true }); return }
   try {
     // #2579: this branch used to destructure `{ sessions }` off the store's
     // return value — which is an ARRAY (`data.sessions || []`). `sessions` was
@@ -1444,7 +1444,7 @@ async function landOnAgent(name) {
     // await: the ensure spends two round trips where the old code spent one.
     if (activeAgentPageName.value !== name) return
     const landed = landingThread(threads.value, name)
-    if (landed) { openThread(landed); return }
+    if (landed) { openThread(landed, { replace: true }); return }
   } catch {
     // Fall through: a fresh chat is a better answer than a dead stage.
   }
@@ -1541,8 +1541,11 @@ function newChatWithAgent(name) {
   escapeStage()
 }
 function switchAgent(name) { newChatWithAgent(name) }   // mid-thread = plain new chat, no carry-over
-function openThread(t) {
-  if (guardLeaveCall(() => openThread(t))) return   // ent#534/ent#551: ask, then leave
+// `replace` is for the `/workspace/a/:name` -> thread redirect (`landOnAgent`):
+// pushing there leaves the redirect source in history, so Back lands on it and
+// it redirects forward again — a trap. Event handlers pass only `t`.
+function openThread(t, { replace = false } = {}) {
+  if (guardLeaveCall(() => openThread(t, { replace }))) return   // ent#534/ent#551: ask, then leave
   unreachableAgent.value = null
   // Opening an existing thread is the opposite intent; clear it so a later
   // send does not still ask for a fresh one.
@@ -1554,7 +1557,8 @@ function openThread(t) {
   activeAgentName.value = t.agent_name || activeAgentName.value
   pendingSession.value = sid; prefill.value = ''; convGen.value++
   search.value = ''
-  router.push(`/workspace/c/${sid}`)
+  if (replace) router.replace(`/workspace/c/${sid}`)
+  else router.push(`/workspace/c/${sid}`)
 }
 function onSessionAdopted(id) {
   pendingSession.value = id

@@ -488,7 +488,7 @@ describe('the shell: the canvas takes the right column, and navigation waits', (
     // guard (see "leaving the stage mid-call asks first"). Same protection, in
     // words, and nothing else may run before the guard.
     expect(SHELL_CODE).toMatch(/function newChatWithAgent\(name\) \{\s*if \(guardLeaveCall\(\(\) => newChatWithAgent\(name\)\)\) return/)
-    expect(SHELL_CODE).toMatch(/function openThread\(t\) \{\s*if \(guardLeaveCall\(\(\) => openThread\(t\)\)\) return/)
+    expect(SHELL_CODE).toMatch(/function openThread\(t, \{ replace = false \} = \{\}\) \{\s*if \(guardLeaveCall\(\(\) => openThread\(t, \{ replace \}\)\)\) return/)
     expect(SHELL_CODE).toMatch(/function onGlobalKeydown\(e\) \{[\s\S]{0,260}if \(voiceCall\.value\.active\) \{[\s\S]{0,120}guardLeaveCall\(\(\) => onGlobalKeydown\(e\)\)/)
   })
   it('clears the call state when the conversation remounts', () => {
@@ -821,7 +821,7 @@ describe('leaving the stage mid-call asks first', () => {
   })
 
   it('every exit from the stage routes through the one guard, and the guard ends the call through the conversation', () => {
-    for (const fn of ['function newChatWithAgent(name)', 'function openThread(t)', 'function newChat()', 'function openRoom(roomId)', 'function openAgentPage(name)']) {
+    for (const fn of ['function newChatWithAgent(name)', 'function openThread(t, { replace = false } = {})', 'function newChat()', 'function openRoom(roomId)', 'function openAgentPage(name)']) {
       const at = SHELL.indexOf(fn)
       expect(at, fn).toBeGreaterThan(-1)
       expect(SHELL.slice(at, at + 420), fn).toContain('guardLeaveCall(')

@@ -269,3 +269,16 @@ describe('#2579 — the title settle cycle', () => {
     expect(store).toMatch(/return data\?\.title_generation \|\| null/)
   })
 })
+
+describe('Back is not trapped by the agent-landing redirect', () => {
+  it('landOnAgent replaces /workspace/a/:name with the thread; clicks still push', () => {
+    // A push leaves `/workspace/a/:name` in history; Back lands on it and the
+    // route watcher redirects forward again, so Back never leaves the agent.
+    const src = codeOnly(PORTAL())
+    expect(src).toMatch(/openThread\(target, \{ replace: true \}\)/)
+    expect(src).toMatch(/openThread\(landed, \{ replace: true \}\)/)
+    expect(src).toMatch(/if \(replace\) router\.replace\(`\/workspace\/c\/\$\{sid\}`\)\s*else router\.push\(`\/workspace\/c\/\$\{sid\}`\)/)
+    // Emitted handlers pass only the thread, so they keep push semantics.
+    expect(src).toMatch(/@open-thread="openThread"/)
+  })
+})
