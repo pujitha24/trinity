@@ -81,6 +81,11 @@ NO_WRITE_CREDENTIALS_MESSAGE = (
     "or add a GitHub token."
 )
 
+GIT_NOT_CONFIGURED_MESSAGE = (
+    "Git sync is not configured for this agent. Use 'Initialize GitHub Sync' "
+    "in this agent's Git tab to connect it to a GitHub repository."
+)
+
 class ConflictClass(str, Enum):
     """Symbolic class of a git sync/push/pull failure, used by the UI to pick
     operator-readable copy.

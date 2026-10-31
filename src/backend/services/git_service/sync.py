@@ -169,6 +169,15 @@ async def sync_to_github(
     # credentials — fail with an honest, actionable message instead of
     # letting the in-container push die on a cryptic auth prompt.
     if not await _agent_can_push(agent_name, container):
+        # An agent with no repository at all has no template to "track" and no
+        # Bind panel in its Git tab — say so instead of the credentials copy.
+        if not db.get_git_config(agent_name):
+            return GitSyncResult(
+                success=False,
+                message=conflicts.GIT_NOT_CONFIGURED_MESSAGE,
+                conflict_type="git_not_configured",
+                conflict_class="UNKNOWN",
+            )
         return GitSyncResult(
             success=False,
             message=conflicts.NO_WRITE_CREDENTIALS_MESSAGE,
@@ -364,6 +373,11 @@ async def reset_to_main_preserve_state(agent_name: str) -> Dict[str, Any]:
     # for a tokenless agent with the same honest message as sync.
     container = get_agent_container(agent_name)
     if container and not await _agent_can_push(agent_name, container):
+        if not db.get_git_config(agent_name):
+            return {
+                "error": "no_git_config",
+                "message": conflicts.GIT_NOT_CONFIGURED_MESSAGE,
+            }
         return {
             "error": "no_write_credentials",
             "message": conflicts.NO_WRITE_CREDENTIALS_MESSAGE,

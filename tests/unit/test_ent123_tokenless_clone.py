@@ -647,6 +647,38 @@ class TestWriteCredentialGuard:
         assert "no write credentials" in low
         assert "token" in low, "the refusal must still name a remedy"
 
+    def test_sync_without_git_config_says_not_configured(self, git_service_env):
+        """An agent with no repository gets "not configured", not the
+        public-template / Bind-panel copy that cannot apply to it."""
+        gs, db = git_service_env
+        db.get_agent_github_pat.return_value = None
+        db.get_git_config.return_value = None
+        c = _FakeContainer(["OTHER=1"])
+        with patch.object(gs.sync, "get_agent_container", MagicMock(return_value=c)), \
+             patch.object(gs.sync, "execute_command_in_container",
+                          AsyncMock(return_value={"exit_code": 1, "output": ""})):
+            result = _run(gs.sync_to_github("a1"))
+        assert result.success is False
+        assert result.conflict_type == "git_not_configured"
+        assert "Initialize GitHub Sync" in result.message
+        assert "template" not in result.message.lower()
+
+    def test_reset_without_git_config_says_not_configured(self, git_service_env):
+        gs, db = git_service_env
+        db.get_agent_github_pat.return_value = None
+        db.get_git_config.return_value = None
+        c = _FakeContainer(["OTHER=1"])
+        activity_mod = MagicMock()
+        activity_mod.activity_service.get_current_activities = AsyncMock(
+            return_value=[])
+        with patch.dict(sys.modules, {"services.activity_service": activity_mod}), \
+             patch.object(gs.sync, "get_agent_container", MagicMock(return_value=c)), \
+             patch.object(gs.sync, "execute_command_in_container",
+                          AsyncMock(return_value={"exit_code": 1, "output": ""})):
+            result = _run(gs.reset_to_main_preserve_state("a1"))
+        assert result["error"] == "no_git_config"
+        assert "Initialize GitHub Sync" in result["message"]
+
     def test_helper_resolvable_credential_counts_as_writable(self, git_service_env):
         """ent#615: a `.env`-only PAT is invisible to both cheap tiers.
 
