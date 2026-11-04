@@ -2673,6 +2673,7 @@ async function send() {
     if (attachments.value.length) {
       await attachmentsSettled()
       carried = sentAttachments(attachments.value)
+      if (!carried.length) carried = null
       // The message carries them now, so the composer lets go at once rather
       // than showing the same files twice until the turn ends.
       clearAttachments()

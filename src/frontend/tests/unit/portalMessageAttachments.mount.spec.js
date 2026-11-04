@@ -123,6 +123,17 @@ describe('portalMessageAttachments helpers (#3265)', () => {
     expect(out[1]).toMatchObject({ filename: 'big.mov', failed: true, error: 'Too large.', file: null })
   })
 
+  it('leaves a pre-flight refusal off the message but keeps an attempted failure', () => {
+    const out = sentAttachments([
+      { name: 'huge.pdf', size: 27e6, file, error: 'Too large (26.0 MB).', rejected: true },
+      { name: 'ok.png', serverName: 'ok.png', size: 1, file, error: '' },
+      { name: 'flaky.png', size: 1, file, error: 'Upload failed.' },
+    ])
+    expect(out.map((a) => a.filename)).toEqual(['ok.png', 'flaky.png'])
+    expect(out[1]).toMatchObject({ failed: true, error: 'Upload failed.' })
+    expect(sentAttachments([{ name: 'huge.pdf', size: 27e6, file, error: 'x', rejected: true }])).toEqual([])
+  })
+
   it('sends names and failures, never bytes', () => {
     expect(attachmentsForRequest(null)).toBeNull()
     expect(attachmentsForRequest([])).toBeNull()

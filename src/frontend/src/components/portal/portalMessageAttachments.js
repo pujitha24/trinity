@@ -21,7 +21,9 @@ import { previewKind } from './portalFiles'
  * name), and it is what the server checks the turn against.
  */
 export function sentAttachments(entries = []) {
-  return entries.map((e) => {
+  // A pre-flight refusal (`rejected`) was never attempted: the composer chip
+  // reported it, so the message carries only what was actually uploaded or tried.
+  return entries.filter((e) => !e.rejected).map((e) => {
     const failed = !!e.error
     return {
       filename: e.serverName || e.name,

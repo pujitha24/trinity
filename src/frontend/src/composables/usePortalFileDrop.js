@@ -251,6 +251,9 @@ export function usePortalFileDrop(upload, { disabled = () => false, discard = nu
         size: file.size,
         uploading: !rejection,
         error: rejection || '',
+        // Refused in the browser before any upload: the chip already told the
+        // person, and the sent message must not record it as a failed upload.
+        rejected: !!rejection,
         done: false,
         // #2794: the handle, kept so the SAME bytes can reach a SECOND
         // destination without asking the person to pick the file again —
