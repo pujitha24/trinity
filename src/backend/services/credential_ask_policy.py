@@ -42,6 +42,11 @@ CREDENTIAL_NAME_MAX = 64
 PLATFORM_WRITTEN_ENV_NAMES = frozenset({
     "TRINITY_MCP_API_KEY", "TRINITY_BACKEND_URL", "TRINITY_AGENT_NAME",
     "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN",
+    # The agent's model auth for the other runtimes, the subscription shadow
+    # key (mirrors `execution_env.SUBSCRIPTION_SHADOW_KEYS`) and the Claude
+    # config dir the platform points at the subscription login.
+    "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY",
+    "GOOGLE_API_KEY", "CLAUDE_CONFIG_DIR",
 })
 
 #: Mirror of the agent image's `execution_env.PROTECTED_KEYS`.

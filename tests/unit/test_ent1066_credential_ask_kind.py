@@ -287,8 +287,15 @@ class TestReservedNamesMirrorTheAgentImage:
     def test_the_platform_written_keys_are_reserved(self):
         from services import credential_ask_policy as policy
         for name in ("TRINITY_MCP_API_KEY", "TRINITY_BACKEND_URL", "TRINITY_AGENT_NAME",
-                     "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"):
+                     "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN",
+                     "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY",
+                     "GOOGLE_API_KEY", "CLAUDE_CONFIG_DIR"):
             assert policy.credential_name_problem(name) == "reserved", name
+
+    def test_every_subscription_shadow_key_is_reserved(self, agent_env):
+        from services import credential_ask_policy as policy
+        missing = set(agent_env.SUBSCRIPTION_SHADOW_KEYS) - set(policy.RESERVED_ENV_NAMES)
+        assert not missing, sorted(missing)
 
     def test_a_plain_name_has_no_problem(self):
         from services import credential_ask_policy as policy
