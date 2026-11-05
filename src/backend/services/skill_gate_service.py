@@ -1841,6 +1841,9 @@ _FAILED_HEADLINE = {"failed": "Failed", "cancelled": "Cancelled", "skipped": "Sk
 
 # How much of a rejection's reason the requester is quoted (trinity-enterprise#755).
 REJECT_REASON_MAX_CHARS = 500
+# How much of its own request an agent is reminded of, so it can tell two of its
+# requests for the same skill apart (trinity#3744).
+REQUEST_ECHO_MAX_CHARS = 200
 
 
 def outcome_text(record: Dict[str, Any], outcome: str, *, decider: Optional[str] = None,
@@ -1868,9 +1871,18 @@ def outcome_text(record: Dict[str, Any], outcome: str, *, decider: Optional[str]
     origin = record.get("requester_execution_id")
     tail = f" (Your request came from execution {origin}.)" if origin else ""
     marker = "" if for_person else "[Trinity] "
+    # trinity#3744: an agent with several requests in flight matches an outcome
+    # on its content, not on an opaque id. Slashes dropped so the echo never
+    # reads as a request to run a skill; quotes are dropped so the span can't be closed, and the reason's double-quoted span stays the only one.
+    echo = ""
+    if not for_person and record.get("request_text"):
+        asked = _one_line(sanitize_text(record["request_text"]).replace("/", "")
+                          .replace('"', "").replace("'", "").replace("[Trinity]", "Trinity"),
+                          REQUEST_ECHO_MAX_CHARS)
+        echo = f" (you asked: '{asked}')" if asked else ""
     head = headline or _HEADLINE.get(outcome) or outcome.replace("_", " ").capitalize()
     return (f"{marker}{head} — your request {record['request_id']} to run the skill {skills} "
-            f"on {record['agent_name']} {body}.{tail}")
+            f"on {record['agent_name']}{echo} {body}.{tail}")
 
 
 def request_status(request_id: str, agent_name: str) -> Dict[str, Optional[str]]:

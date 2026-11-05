@@ -379,3 +379,16 @@ def test_the_backstop_never_re_holds_the_approved_run_itself(run, monkeypatch, s
         agent_name=FIN, message="/pay-invoice 100 EUR", request_text="/pay-invoice 100 EUR",
         triggered_by="agent", execution_id="exec-approved", fields={}))
     assert enforced == []
+
+
+# --- trinity#3744: an agent's notice names the request by its content ---
+
+def test_an_agents_notice_echoes_its_request_without_a_slash_and_a_persons_does_not():
+    base = {"request_id": "gate-x", "agent_name": FIN, "skills": ["send-payment-reminder"]}
+    y = dict(base, request_text='/send-payment-reminder for invoice Y, key "k"')
+    x = dict(base, request_text="/send-payment-reminder for invoice X")
+    text_y = _GATE.outcome_text(y, "denied", reason="no")
+    assert "you asked: 'send-payment-reminder for invoice Y, key k'" in text_y
+    assert "invoice X" not in text_y and "/" not in text_y
+    assert "invoice X" in _GATE.outcome_text(x, "denied")
+    assert "you asked" not in _GATE.outcome_text(y, "denied", for_person=True)
