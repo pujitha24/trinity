@@ -18,7 +18,7 @@ from typing import List, Optional
 from sqlalchemy.exc import OperationalError
 
 from database import db
-from services import ask_service, credential_ask_policy, credential_destination, skill_gate_service
+from services import ask_service, credential_ask_policy, credential_destination, role_addressing, skill_gate_service
 from services.operator_queue_choices import (
     SOMETHING_ELSE,
     ReservedAnswerError,
@@ -709,6 +709,17 @@ def answer_ask(item_id: str, email: str, is_platform: bool,
                     is_platform=is_platform)
 
 
+def _is_primary_now(agent_name: str, email: str) -> bool:
+    """Is `email` the agent's single primary person RIGHT NOW? Fails closed:
+    an unresolvable or multi-person primary is not a yes."""
+    try:
+        single = role_addressing.resolve(agent_name, "primary").single
+    except Exception:  # noqa: BLE001
+        logger.warning("[WorkspaceAsks] primary re-check failed for %s", agent_name, exc_info=True)
+        return False
+    return bool(single) and single.strip().lower() == (email or "").strip().lower()
+
+
 async def provide_credential(item_id: str, email: str, is_platform: bool, value: str, *,
                              actor_ip: Optional[str] = None,
                              endpoint: Optional[str] = None,
@@ -744,6 +755,10 @@ async def provide_credential(item_id: str, email: str, is_platform: bool, value:
     if item.get("type") != "credential":
         # the same refusal as "not yours": a typed answer belongs to the other
         # route, and this one must not confirm which ids are credential asks
+        raise AskError(404, "not_found", "Ask not found")
+    if not _is_primary_now(item.get("agent_name") or "", email):
+        # the addressee was fixed at raise time; a reassigned primary must not
+        # leave the former one able to set the agent's environment
         raise AskError(404, "not_found", "Ask not found")
     if item.get("status") != "pending":
         raise AskError(400, "already_resolved",

@@ -83,6 +83,17 @@ def roster(monkeypatch):
     monkeypatch.setattr(portal_service, "agent_on_roster", lambda *a, **k: True)
 
 
+@pytest.fixture(autouse=True)
+def primary(monkeypatch):
+    """The agent's single primary person — the addressee, unless a test moves it."""
+    from services import role_addressing
+    who = {"email": OWNER}
+    monkeypatch.setattr(
+        role_addressing, "resolve",
+        lambda agent, role, **k: role_addressing.Resolution(role, [who["email"]], who["email"], True))
+    return who
+
+
 class _FakeEnc:
     def encrypt(self, d: dict) -> str:
         return "ENV:" + json.dumps(d)
@@ -742,3 +753,25 @@ def test_the_sink_module_never_interpolates_the_value():
         if verdict:
             offences.append((node.lineno, verdict))
     assert not offences, offences
+
+
+# ===========================================================================
+# 9. The addressee is re-resolved as the agent's primary at answer time (#4189)
+# ===========================================================================
+
+
+class TestPrimaryReassigned:
+    def test_the_former_primary_is_refused_and_nothing_is_written(self, world, primary):
+        uid = _pending(world.db, "p-1")
+        primary["email"] = "new-primary-4189@example.com"     # reassigned after the raise
+        _refused(uid, 404, "not_found")
+        assert world.agent.calls == []                        # the agent's .env was never touched
+        assert world.db.get_operator_queue_item(uid)["status"] == "pending"
+
+    def test_no_primary_at_all_is_the_same_refusal(self, world, monkeypatch):
+        from services import role_addressing
+        uid = _pending(world.db, "p-2")
+        monkeypatch.setattr(role_addressing, "resolve",
+                            lambda *a, **k: role_addressing.Resolution("primary", [], None, False))
+        _refused(uid, 404, "not_found")
+        assert world.agent.calls == []

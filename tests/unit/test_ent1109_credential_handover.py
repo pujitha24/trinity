@@ -193,6 +193,17 @@ def roster(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def primary(monkeypatch):
+    """The agent's single primary person — the addressee, unless a test moves it."""
+    from services import role_addressing
+    who = {"email": OWNER}
+    monkeypatch.setattr(
+        role_addressing, "resolve",
+        lambda agent, role, **k: role_addressing.Resolution(role, [who["email"]], who["email"], True))
+    return who
+
+
+@pytest.fixture(autouse=True)
 def dns(monkeypatch):
     """The resolver the DELIVERY-time check uses (`a2a_client.validate_endpoint`,
     off the loop). Raise time resolves nothing — pinned below."""
