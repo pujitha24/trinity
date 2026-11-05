@@ -28,7 +28,7 @@ from config import CORS_ORIGINS, VOICE_ENABLED
 from models import User
 from dependencies import get_current_user, owner_is_suspended, owner_is_workspace_only, scope_may_open_event_stream, terms_route, workspace_route
 from services.docker_service import docker_client, list_all_agents_fast
-from utils.helpers import utc_now_iso
+from utils.helpers import env_flag, utc_now_iso
 
 # OpenTelemetry imports for distributed tracing (RELIABILITY-002)
 from opentelemetry import trace
@@ -361,7 +361,7 @@ def setup_opentelemetry(app: FastAPI) -> bool:
 
     Returns True if initialization succeeded, False otherwise.
     """
-    if os.getenv("OTEL_ENABLED", "0") != "1":
+    if not env_flag("OTEL_ENABLED", False):
         return False
 
     try:

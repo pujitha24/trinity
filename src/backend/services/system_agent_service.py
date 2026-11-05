@@ -46,7 +46,7 @@ from services.agent_service.lifecycle import (
 from services.agent_service.capabilities import normalize_cpu, normalize_memory
 from utils.credential_sanitizer import sanitize_text
 from utils.admin_identity import admin_username
-from utils.helpers import utc_now_iso
+from utils.helpers import env_flag, utc_now_iso
 from utils.safe_yaml import load_template_yaml  # ent#314
 
 logger = logging.getLogger(__name__)
@@ -418,7 +418,7 @@ class SystemAgentService:
         # accepted by the pull seams and the heartbeat for its own name (#3814).
 
         # OpenTelemetry Configuration (enabled by default)
-        if os.getenv('OTEL_ENABLED', '1') == '1':
+        if env_flag('OTEL_ENABLED', True):
             env_vars['CLAUDE_CODE_ENABLE_TELEMETRY'] = '1'
             env_vars['OTEL_METRICS_EXPORTER'] = os.getenv('OTEL_METRICS_EXPORTER', 'otlp')
             env_vars['OTEL_LOGS_EXPORTER'] = os.getenv('OTEL_LOGS_EXPORTER', 'otlp')

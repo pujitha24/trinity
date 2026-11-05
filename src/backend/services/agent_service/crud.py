@@ -55,7 +55,7 @@ from services import rate_limiter
 from . import ephemeral as ephemeral_service
 from services.github_service import GitHubService, GitHubError
 from services.agent_auth import derive_agent_token
-from utils.helpers import parse_iso_timestamp, sanitize_agent_name, to_utc_iso, utc_now_iso
+from utils.helpers import env_flag, parse_iso_timestamp, sanitize_agent_name, to_utc_iso, utc_now_iso
 from utils.safe_yaml import HardenedYamlError, load_template_yaml
 from .fork_to_own import (
     SAVED_TOKEN_TIERS, fork_pat_required, fork_template_to_own_repo, saved_token_message,
@@ -2206,7 +2206,7 @@ def _apply_gemini_and_otel_env(config: AgentConfig, env_vars: dict) -> None:
 
     # OpenTelemetry Configuration (enabled by default)
     # Claude Code has built-in OTel support - these vars enable metrics export
-    if os.getenv('OTEL_ENABLED', '1') == '1':
+    if env_flag('OTEL_ENABLED', True):
         env_vars['CLAUDE_CODE_ENABLE_TELEMETRY'] = '1'
         env_vars['OTEL_METRICS_EXPORTER'] = os.getenv('OTEL_METRICS_EXPORTER', 'otlp')
         env_vars['OTEL_LOGS_EXPORTER'] = os.getenv('OTEL_LOGS_EXPORTER', 'otlp')

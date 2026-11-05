@@ -15,12 +15,12 @@ import httpx
 from fastapi import Request
 
 from database import db
-from utils.helpers import utc_now_iso
+from utils.helpers import env_flag, utc_now_iso
 from models import User
 
 logger = logging.getLogger(__name__)
 
-OTEL_ENABLED = os.getenv("OTEL_ENABLED", "1") == "1"
+OTEL_ENABLED = env_flag("OTEL_ENABLED", True)
 OTEL_PROMETHEUS_ENDPOINT = os.getenv("OTEL_PROMETHEUS_ENDPOINT", "http://trinity-otel-collector:8889/metrics")
 
 

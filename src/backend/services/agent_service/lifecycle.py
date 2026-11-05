@@ -33,7 +33,7 @@ from services.settings_service import get_anthropic_api_key, get_github_pat, get
 from services.skill_service import skill_service
 from .helpers import check_shared_folder_mounts_match, check_api_key_env_matches, check_github_pat_env_matches, check_resource_limits_match, check_full_capabilities_match, check_guardrails_env_matches, check_agent_auth_token_env_matches, check_agent_name_env_matches, check_pull_mode_env_matches, check_agent_mcp_key_matches, check_base_image_matches, is_claude_runtime, is_system_agent_name
 from services.agent_auth import derive_agent_token
-from utils.helpers import utc_now_iso
+from utils.helpers import env_flag, utc_now_iso
 from .file_sharing import check_public_folder_mount_matches
 from .read_only import inject_read_only_hooks, remove_read_only_hooks
 
@@ -1748,7 +1748,7 @@ async def recreate_missing_container(agent_name: str):
     }
 
     # OpenTelemetry (default on) — same wiring as create.
-    if os.getenv("OTEL_ENABLED", "1") == "1":
+    if env_flag("OTEL_ENABLED", True):
         env_vars["CLAUDE_CODE_ENABLE_TELEMETRY"] = "1"
         env_vars["OTEL_METRICS_EXPORTER"] = os.getenv("OTEL_METRICS_EXPORTER", "otlp")
         env_vars["OTEL_LOGS_EXPORTER"] = os.getenv("OTEL_LOGS_EXPORTER", "otlp")

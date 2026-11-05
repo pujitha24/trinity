@@ -1,6 +1,8 @@
 """
 Utility helper functions for the Trinity backend.
 """
+import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
@@ -41,6 +43,31 @@ def utc_now_iso() -> str:
         '2026-01-15T10:30:00.123456Z'
     """
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+
+_ENV_TRUTHY = frozenset({"1", "true", "yes", "on"})
+_ENV_FALSY = frozenset({"0", "false", "no", "off"})
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    """Read an on/off environment flag: 1/true/yes/on or 0/false/no/off, any case.
+
+    Unset or empty returns ``default``. An unrecognised value logs a WARNING
+    naming the variable and returns ``default`` (a typo never flips the flag).
+    """
+    raw = os.getenv(name, "")
+    value = raw.strip().lower()
+    if not value:
+        return default
+    if value in _ENV_TRUTHY:
+        return True
+    if value in _ENV_FALSY:
+        return False
+    logging.getLogger(__name__).warning(
+        "%s=%r is not a recognised boolean (use 1/true/yes/on or 0/false/no/off); "
+        "using default %s", name, raw, default,
+    )
+    return default
 
 
 def iso_cutoff(hours: int = 0, *, minutes: int = 0, seconds: int = 0) -> str:
