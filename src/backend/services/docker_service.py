@@ -516,14 +516,28 @@ def is_port_available(port: int) -> bool:
     real guards are the label scan + the Redis reservation in
     `get_next_available_port`, plus the bind-conflict retry in crud (D2).
     """
+    import errno
     import socket
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(1)
             s.bind(('0.0.0.0', port))
-            return True
     except (socket.error, OSError):
         return False
+    # An IPv4 wildcard bind does not collide with an IPv6-only listener
+    # (`[::1]`, `[::]` with IPV6_V6ONLY), so probe `::` too. V6ONLY keeps this
+    # probe from also claiming the IPv4 side. A host without IPv6 is decided
+    # by the IPv4 result alone.
+    if not socket.has_ipv6:
+        return True
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s6:
+            s6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            s6.settimeout(1)
+            s6.bind(('::', port))
+    except OSError as exc:
+        return exc.errno in (errno.EAFNOSUPPORT, errno.EADDRNOTAVAIL)
+    return True
 
 
 # ---------------------------------------------------------------------------

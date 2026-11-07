@@ -1,7 +1,9 @@
 """`is_port_available` is a bind-only probe: it never listens, and it closes.
 
 `services.docker_service.is_port_available(port)` opens a TCP socket, binds it
-to `0.0.0.0:port`, and closes it when its `with` block exits. It never calls
+to `0.0.0.0:port`, and closes it when its `with` block exits; when the host has
+IPv6 it then does the same on `[::]:port` with IPV6_V6ONLY set, because an IPv4
+wildcard bind does not collide with an IPv6-only listener. It never calls
 `listen()` or `accept()`, so nothing can ever connect to that socket; the bind
 only asks the kernel whether the port is taken. (It is a weak extra filter for
 SSH-port allocation; `test_2215_port_allocation.py` covers the allocator and
@@ -12,14 +14,15 @@ existing bind on ANY local address, which a `127.0.0.1` probe would miss.
 
 Pinned here, on the function's source:
 
-* it constructs exactly one socket, `socket.socket(socket.AF_INET,
-  socket.SOCK_STREAM)`, used as a context manager, and names no `listen`,
+* it constructs exactly two sockets, an AF_INET and an AF_INET6 stream socket,
+  each used as a context manager, and names no `listen`,
   `accept`, `create_server`, `create_connection` or low-level `_socket`;
 
 and on the real function and real sockets:
 
-* the exact socket calls are `settimeout`, `bind(("0.0.0.0", port))`, `close`,
-  on one AF_INET / SOCK_STREAM socket, on both the free and the busy path;
+* the exact socket calls are `settimeout`, `bind(("0.0.0.0", port))`, `close`
+  on an AF_INET socket, then (IPv6 hosts) `setsockopt(V6ONLY)`, `settimeout`,
+  `bind(("::", port))`, `close` on an AF_INET6 socket;
 * after it returns, the socket is closed and nothing accepts a connection;
 * a bind held on 127.0.0.1, and one held on another local address, both make it
   report the port busy, while a 127.0.0.1 probe would miss the second.
@@ -29,6 +32,7 @@ abilityai/trinity-enterprise#1117
 from __future__ import annotations
 
 import ast
+import errno
 import importlib
 import socket
 import sys
@@ -129,7 +133,10 @@ def test_probe_source_builds_one_stream_socket_and_names_no_listener():
         for n in ast.walk(fn)
         if isinstance(n, ast.Call) and ast.unparse(n.func).split(".")[-1] == "socket"
     ]
-    assert constructors == ["socket.socket(socket.AF_INET, socket.SOCK_STREAM)"], constructors
+    assert constructors == [
+        "socket.socket(socket.AF_INET, socket.SOCK_STREAM)",
+        "socket.socket(socket.AF_INET6, socket.SOCK_STREAM)",
+    ], constructors
     withs = [n for n in ast.walk(fn) if isinstance(n, ast.With)]
     assert [ast.unparse(item.context_expr) for w in withs for item in w.items] == constructors
 
@@ -140,22 +147,37 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _probe_calls(sockets, port):
-    assert len(sockets) == 1, f"expected one probe socket, got {len(sockets)}"
-    (probe,) = sockets
-    assert (probe.family, probe.type) == (socket.AF_INET, socket.SOCK_STREAM)
-    assert probe.fileno() == -1, "the probe socket was left open"
-    return [(name, args) for name, args in probe._calls]
+_V6 = [
+    ("setsockopt", (socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)),
+    ("settimeout", (1,)),
+    ("bind", (("::", 0),)),
+    ("close", ()),
+]
+
+
+def _probe_calls(sockets, port, *, v6):
+    """Per-socket call lists; every probe socket must be closed."""
+    assert len(sockets) == (2 if v6 else 1), f"unexpected probe sockets: {len(sockets)}"
+    assert all(sk.fileno() == -1 for sk in sockets), "a probe socket was left open"
+    families = [(sk.family, sk.type) for sk in sockets]
+    expected = [(socket.AF_INET, socket.SOCK_STREAM)]
+    if v6:
+        expected.append((socket.AF_INET6, socket.SOCK_STREAM))
+    assert families == expected
+    return [sk._calls for sk in sockets]
+
+
+_V4_FREE = lambda port: [("settimeout", (1,)), ("bind", (("0.0.0.0", port),)), ("close", ())]  # noqa: E731
 
 
 def test_free_port_is_probed_by_bind_then_close_only(recorded, is_port_available):
     port = _free_port()
     assert is_port_available(port) is True
-    assert _probe_calls(recorded, port) == [
-        ("settimeout", (1,)),
-        ("bind", (("0.0.0.0", port),)),
-        ("close", ()),
-    ]
+    v6 = socket.has_ipv6
+    calls = _probe_calls(recorded, port, v6=v6)
+    assert calls[0] == _V4_FREE(port)
+    if v6:
+        assert calls[1] == [(n, (("::", port),) if n == "bind" else a) for n, a in _V6]
 
 
 def test_busy_port_is_probed_the_same_way_and_still_closed(recorded, is_port_available):
@@ -163,11 +185,42 @@ def test_busy_port_is_probed_the_same_way_and_still_closed(recorded, is_port_ava
         held.bind(("127.0.0.1", 0))
         port = held.getsockname()[1]
         assert is_port_available(port) is False
-    assert _probe_calls(recorded, port) == [
-        ("settimeout", (1,)),
-        ("bind", (("0.0.0.0", port),)),
-        ("close", ()),
-    ]
+    # The IPv4 bind fails first, so the IPv6 probe is never opened.
+    assert _probe_calls(recorded, port, v6=False) == [_V4_FREE(port)]
+
+
+@pytest.mark.skipif(not socket.has_ipv6, reason="host has no IPv6")
+@pytest.mark.parametrize("host", ["::1", "::"])
+def test_ipv6_only_listener_makes_port_busy(host, is_port_available):
+    try:
+        held = _RealSocket(socket.AF_INET6, socket.SOCK_STREAM)
+        held.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+        held.bind((host, 0))
+    except OSError as exc:
+        pytest.skip(f"cannot bind [{host}] here: {exc}")
+    with held:
+        held.listen(1)
+        assert is_port_available(held.getsockname()[1]) is False
+
+
+def test_host_without_ipv6_is_decided_by_ipv4_alone(monkeypatch, recorded, is_port_available):
+    monkeypatch.setattr(socket, "has_ipv6", False)
+    assert is_port_available(_free_port()) is True
+    assert len(recorded) == 1
+
+
+@pytest.mark.parametrize("code", [errno.EAFNOSUPPORT, errno.EADDRNOTAVAIL])
+def test_unsupported_ipv6_is_skipped_not_busy(monkeypatch, code, is_port_available):
+    monkeypatch.setattr(socket, "has_ipv6", True)
+
+    class NoV6(_RealSocket):
+        def __init__(self, family=-1, *args, **kwargs):
+            if family == socket.AF_INET6:
+                raise OSError(code, "no ipv6")
+            super().__init__(family, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "socket", NoV6)
+    assert is_port_available(_free_port()) is True
 
 
 def test_nothing_accepts_connections_after_the_probe(is_port_available):
