@@ -90,7 +90,9 @@ def _format_pat_line(pat: str, key: str = "GITHUB_PAT") -> str:
     so the contract is held by a parity test over a shared corpus
     (`tests/unit/test_2023_env_quote_round_trip.py`) rather than a shared call.
     """
-    if "\n" in pat or "\r" in pat:
+    # The reader splits with str.splitlines(), which also breaks on \x0b \x0c
+    # \x1c-\x1e \x85 \u2028 \u2029 — refuse every one, as agent_env_patch does.
+    if pat.splitlines() not in ([], [pat]):
         raise ValueError(
             f"value for {key!r} contains a newline or carriage return; "
             ".env is line-oriented and such a value would define an extra key"

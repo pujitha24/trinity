@@ -33,6 +33,12 @@ from pathlib import Path
 
 import pytest
 
+# Every other boundary str.splitlines() breaks on (the agent reader uses it).
+_OTHER_LINE_BREAKS = [
+    f"ghp_x{sep}SECOND_KEY=1"
+    for sep in ("\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029")
+]
+
 _REPO = Path(__file__).resolve().parents[2]
 _BACKEND_STR = str(_REPO / "src" / "backend")
 while _BACKEND_STR in sys.path:
@@ -309,7 +315,7 @@ class TestNewlinesAreRefusedNotEscaped:
     refused at the writer rather than left implicit.
     """
 
-    @pytest.mark.parametrize("bad", ["a\nB=x", "a\r\nB=x", "trailing\n", "\rcr"])
+    @pytest.mark.parametrize("bad", ["a\nB=x", "a\r\nB=x", "trailing\n", "\rcr", *_OTHER_LINE_BREAKS])
     def test_the_agent_writer_refuses(self, bad):
         import sys
         sys.path.insert(0, str(_REPO / "docker" / "base-image"))
@@ -318,7 +324,7 @@ class TestNewlinesAreRefusedNotEscaped:
         with pytest.raises(ValueError, match="newline"):
             format_env_line("ANTHROPIC_API_KEY", bad)
 
-    @pytest.mark.parametrize("bad", ["a\nB=x", "a\r\nB=x"])
+    @pytest.mark.parametrize("bad", ["a\nB=x", "a\r\nB=x", *_OTHER_LINE_BREAKS])
     def test_the_backend_writer_refuses_too(self, bad):
         import sys
         sys.path.insert(0, str(_REPO / "src" / "backend"))

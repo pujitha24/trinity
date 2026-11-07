@@ -346,7 +346,9 @@ def format_env_line(key: str, value: str) -> str:
     # input, and no credential format contains a newline, so refusing at the
     # writer is both safe and honest — the caller gets a named error instead of
     # a file that silently means something else.
-    if "\n" in value or "\r" in value:
+    # The reader splits with str.splitlines(), which also breaks on \x0b \x0c
+    # \x1c-\x1e \x85 \u2028 \u2029 — refuse every one, as agent_env_patch does.
+    if value.splitlines() not in ([], [value]):
         raise ValueError(
             f"value for {key!r} contains a newline or carriage return; "
             ".env is line-oriented and such a value would define an extra key"
