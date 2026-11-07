@@ -222,8 +222,8 @@ def test_1900_local_template_name_regex_parity(real_modules):
         template_service).
 
     Duplication is only safe while something pins the copies equal. This is it.
-    Note the shared `$`-matches-before-a-trailing-newline edge is deliberate on
-    both sides (D5): "fixing" one copy to `\\Z` silently breaks this guard.
+    Both copies end in `\\Z`, not `$`, so a trailing newline is refused (#4331);
+    changing only one copy breaks this guard.
     """
     crud, template_service = real_modules
 
