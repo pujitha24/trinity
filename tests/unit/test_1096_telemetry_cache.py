@@ -462,3 +462,28 @@ def test_parse_pool_size_is_defensive():
     assert telemetry._parse_pool_size("8", 16) == 8
     assert telemetry._parse_pool_size("0", 16) == 1                       # floor
     assert telemetry._parse_pool_size("99999", 16) == telemetry._POOL_SIZE_MAX  # cap
+
+
+@pytest.mark.asyncio
+async def test_container_error_text_is_logged_not_returned(monkeypatch, caplog):
+    """A Docker SDK exception's text (request URL, API version) must reach the
+    log only; the payload carries the exception class, and the container stays
+    out of the totals while still counting in running_count."""
+    sentinel = "http+docker://localhost/v1.47/SENTINEL-4324"
+
+    class _Containers:
+        def get(self, name):
+            raise RuntimeError(sentinel)
+
+    monkeypatch.setattr(telemetry, "docker_client", types.SimpleNamespace(containers=_Containers()))
+    monkeypatch.setattr(telemetry, "list_all_agents_fast", lambda: [_FakeAgent("boom")])
+
+    with caplog.at_level("WARNING", logger=telemetry.logger.name):
+        payload = await telemetry._compute_container_stats()
+
+    assert sentinel not in repr(payload)
+    assert payload["containers"][0]["error"] == "RuntimeError"
+    assert payload["running_count"] == 1
+    assert payload["total_cpu_percent"] == 0.0
+    assert payload["total_memory_mb"] == 0.0
+    assert sentinel in caplog.text

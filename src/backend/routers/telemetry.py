@@ -171,11 +171,16 @@ def _get_single_container_stats_sync(agent_name: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
+        # Docker SDK errors embed the daemon request URL and API version; log
+        # them server-side and expose only the exception class to callers.
+        logger.warning(
+            "Failed to get stats for container agent-%s", agent_name, exc_info=True
+        )
         return {
             "name": agent_name,
             "cpu": 0,
             "memory_mb": 0,
-            "error": str(e)
+            "error": type(e).__name__
         }
 
 
