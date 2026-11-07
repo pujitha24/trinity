@@ -20,8 +20,26 @@ from services import channel_history, idempotency_service
 from services.platform_audit_service import platform_audit_service, AuditEventType
 from services.runtime_secret_scrub import get_staged_values, scrub_text
 from services.settings_service import get_proactive_rate_limit  # #1609
+from utils.credential_sanitizer import sanitize_text
 
 logger = logging.getLogger(__name__)
+
+
+def _failure_summary(label: str, exc: Exception) -> str:
+    """Caller-safe text for an unexpected delivery exception.
+
+    The exception text can carry paths, hosts or keys and ends up in the 404
+    `detail` and the audit row, so only the class name leaves the process; the
+    scrubbed text goes to the backend log (see `_log_delivery_failure`).
+    """
+    return f"{label} delivery failed ({type(exc).__name__} — details in backend logs)"
+
+
+def _log_delivery_failure(prefix: str, exc: Exception) -> None:
+    logger.error(
+        "%s: %s", prefix, sanitize_text(str(exc)),
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
 
 # Rate limiting configuration. The per-recipient cap is admin-configurable
 # (#1609) — sourced from settings at check time via
@@ -394,8 +412,8 @@ class ProactiveMessageService:
                 # Try next channel
                 continue
             except Exception as e:
-                last_error = str(e)
-                logger.warning(f"Proactive message to {ch} failed: {e}")
+                last_error = _failure_summary(ch.capitalize(), e)
+                _log_delivery_failure(f"Proactive message to {ch} failed", e)
                 continue
 
         # All channels failed
@@ -611,8 +629,11 @@ class ProactiveMessageService:
             else:
                 return DeliveryResult(success=False, channel="telegram", error="Send failed")
         except Exception as e:
-            logger.error(f"Telegram delivery failed: {e}")
-            return DeliveryResult(success=False, channel="telegram", error=str(e))
+            _log_delivery_failure("Telegram delivery failed", e)
+            return DeliveryResult(
+                success=False, channel="telegram",
+                error=_failure_summary("Telegram", e),
+            )
 
     async def _deliver_slack(
         self,
@@ -753,8 +774,11 @@ class ProactiveMessageService:
                 session_identifier=adapter.get_session_identifier(probe),
             )
         except Exception as e:
-            logger.error(f"WhatsApp delivery failed: {e}")
-            return DeliveryResult(success=False, channel="whatsapp", error=str(e))
+            _log_delivery_failure("WhatsApp delivery failed", e)
+            return DeliveryResult(
+                success=False, channel="whatsapp",
+                error=_failure_summary("WhatsApp", e),
+            )
 
     async def _deliver_web(
         self,
