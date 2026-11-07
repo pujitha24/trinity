@@ -61,7 +61,7 @@ from ..utils.credential_sanitizer import (
 from ..utils.subprocess_pgroup import EXECUTION_TAG_NAME
 from ._runtime_config import _DEFAULT_EXECUTION_TIMEOUT_SEC, _load_guardrails
 from .activity_tracking import complete_tool_execution, start_tool_execution
-from .execution_env import build_execution_env
+from .execution_env import build_execution_env, unquote_env_value
 from .process_registry import get_process_registry
 from .runtime_adapter import AgentRuntime, RuntimeCapabilities
 from .subprocess_lifecycle import (
@@ -347,16 +347,27 @@ _LEGACY_READ_ONLY_CONFIG = Path(_AGENT_HOME) / ".trinity" / "read-only-config.js
 def _parse_env_value(raw_value: str) -> str:
     """Extract a value from a ``.env`` ``KEY=VALUE`` right-hand side.
 
-    Handles the shapes a human SSH-editing ``.env`` would produce that Trinity's
-    own plain ``KEY=VALUE`` writer never emits: a quoted value (the quotes are
-    stripped and an interior ``#`` is kept), and an unquoted value with a
-    trailing ``# inline comment`` (dropped at the first whitespace-``#``).
+    Handles a quoted value (an interior ``#`` is kept; a double-quoted value is
+    decoded with ``execution_env.unquote_env_value`` so the writer's ``\\"`` and
+    ``\\\\`` escapes round-trip) and an unquoted value with a trailing
+    ``# inline comment`` (dropped at the first whitespace-``#``).
     """
     value = raw_value.strip()
     if value[:1] in ('"', "'"):
         quote = value[0]
-        end = value.find(quote, 1)
-        return value[1:end] if end != -1 else value[1:]
+        end = -1
+        i = 1
+        while i < len(value):
+            if quote == '"' and value[i] == "\\":
+                i += 2
+                continue
+            if value[i] == quote:
+                end = i
+                break
+            i += 1
+        if end == -1:
+            return value[1:]
+        return unquote_env_value(value[:end + 1])
     comment = value.find(" #")
     if comment != -1:
         value = value[:comment].rstrip()

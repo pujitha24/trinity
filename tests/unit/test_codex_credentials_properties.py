@@ -74,6 +74,23 @@ def test_parse_env_value_boundaries(row, raw, expected):
     assert cr._parse_env_value(raw) == expected
 
 
+@pytest.mark.parametrize(
+    "value", ["sk-abc", "a\\b", 'a"b', 'a\\"b', "a\\\\", 'x"', "a # b", "a#b"]
+)
+def test_parse_env_value_round_trips_writer_output(value):
+    """The agent's own writer escapes `\\` and `"` inside double quotes; the
+    Codex key reader must return the original value (shared rule with
+    `execution_env.unquote_env_value`)."""
+    from agent_server.services import execution_env as ee
+
+    rhs = ee.format_env_line("OPENAI_API_KEY", value).split("=", 1)[1]
+    assert cr._parse_env_value(rhs) == value
+
+
+def test_parse_env_value_ignores_text_after_closing_quote():
+    assert cr._parse_env_value('"a\\"b" # note') == 'a"b'
+
+
 # ---------------------------------------------------------------------------
 # _load_api_key_with_source — precedence.
 # ---------------------------------------------------------------------------
